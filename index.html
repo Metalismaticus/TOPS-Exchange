@@ -577,7 +577,7 @@ function renderAll(data) {
 
 function renderMetrics(m) {
   document.getElementById('mAvg').textContent = m.avgPerDay;
-  document.getElementById('mMed').innerHTML = m.medianPrice + ' <small>⚙</small>';
+  document.getElementById('mMed').innerHTML = m.medianPrice + ' <img src="icons/item/gear-rusty.png" style="width:18px;height:18px;vertical-align:middle;image-rendering:pixelated;" alt="G">';
   document.getElementById('mSellers').textContent = m.sellers;
   document.getElementById('mItems').textContent = m.uniqueItems;
   function setDelta(id, val, unit='') {
@@ -611,7 +611,7 @@ function renderPriceChart(data, itemKey) {
       plugins:{ legend:{ display:false } },
       scales:{
         x:{ grid:{ color:'rgba(255,255,255,0.04)' }, ticks:{ color:'#504840', font:{size:10}, maxRotation:0, autoSkip:true, maxTicksLimit:10 } },
-        y:{ grid:{ color:'rgba(255,255,255,0.04)' }, ticks:{ color:'#504840', font:{size:10}, callback:v=>v+' ⚙' } }
+        y:{ grid:{ color:'rgba(255,255,255,0.04)' }, ticks:{ color:'#504840', font:{size:10}, callback:v=>v+' G' } }
       }
     }
   });
@@ -626,7 +626,7 @@ function renderSellers(sellers) {
       <div class="avatar" style="background:${s.color};border-color:${s.colorTx};color:${s.colorTx};">${s.initials}</div>
       <span class="seller-name">${esc(s.name)}</span>
       <span class="seller-lots">${s.lots} lots</span>
-      <span class="seller-vol">${s.volume.toLocaleString()} ⚙</span>
+      <span class="seller-vol">${s.volume.toLocaleString()} <img src="icons/item/gear-rusty.png" style="width:13px;height:13px;vertical-align:middle;image-rendering:pixelated;" alt="G"></span>
     </div>`).join('');
 }
 
@@ -636,11 +636,12 @@ function renderItems(items) {
   el.innerHTML = items.map(it=>`
     <div class="item-row">
       <div class="item-icon">
-        <img src="icons/${esc(it.code)}.png" alt="" onerror="this.style.display='none';this.parentNode.textContent='?';">
+        <img src="icons/item/${esc(it.code)}.png" alt="" onerror="this.src='icons/block/${esc(it.code)}.png';this.onerror=function(){this.style.display='none';this.parentNode.innerHTML='?';};">
+
       </div>
       <span class="item-name">${esc(it.name)}</span>
       <span class="item-cat">${esc(it.cat)}</span>
-      <span class="badge ${it.trend}">${Math.round(it.price)} ⚙${it.trend==='up'?' ↑':''}</span>
+      <span class="badge ${it.trend}">${Math.round(it.price)} <img src="icons/item/gear-rusty.png" style="width:13px;height:13px;vertical-align:middle;image-rendering:pixelated;" alt="G">${it.trend==='up'?' ↑':''}</span>
     </div>`).join('');
 }
 
