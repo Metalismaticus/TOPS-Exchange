@@ -36,6 +36,32 @@
   --mono:      'VT323', monospace;
 }
 
+
+html.light {
+  --bg:        #f0ede4;
+  --bg2:       #e4e0d4;
+  --bg3:       #d8d4c8;
+  --card:      #faf8f2;
+  --border:    #c8c4b4;
+  --border2:   #a8a498;
+  --text:      #1e1c14;
+  --text2:     #5a5448;
+  --text3:     #9a9488;
+  --green:     #2d7d32;
+  --green2:    #1b5e20;
+  --green-dim: #c8e6c9;
+  --amber:     #b45309;
+  --amber-dim: #fef3c7;
+  --red:       #b71c1c;
+  --red-dim:   #ffcdd2;
+  --purple:    #4527a0;
+  --purple-dim:#ede7f6;
+  --teal:      #00695c;
+  --teal-dim:  #e0f2f1;
+}
+
+html.light body::before { background: none; }
+
 html { font-size: 16px; }
 body {
   font-family: var(--mono);
@@ -112,6 +138,21 @@ body::before {
 }
 @keyframes blink-border { 50% { border-color: var(--green2); } }
 
+
+/* ── Theme toggle ── */
+.theme-toggle {
+  font-family: var(--pixel);
+  font-size: 7px; padding: 5px 8px;
+  border: 2px solid var(--border2);
+  box-shadow: 2px 2px 0 #000;
+  background: var(--bg2);
+  color: var(--text2);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: none;
+}
+.theme-toggle:hover { background: var(--bg3); color: var(--text); }
+.theme-toggle:active { transform: translate(2px,2px); box-shadow: none; }
 /* ── Status banner ── */
 #statusBanner {
   display: flex; align-items: center; gap: 10px;
@@ -322,6 +363,7 @@ body::before {
     <div class="header-right">
       <span class="pill">TOPS SERVER</span>
       <span class="pill live">● LIVE</span>
+      <button class="theme-toggle" onclick="toggleTheme()" id="themeBtn">☀ LIGHT</button>
       <span class="pill" id="lastUpdated">...</span>
     </div>
   </header>
@@ -610,8 +652,8 @@ function renderPriceChart(data, itemKey) {
       responsive:true, maintainAspectRatio:false,
       plugins:{ legend:{ display:false } },
       scales:{
-        x:{ grid:{ color:'rgba(255,255,255,0.04)' }, ticks:{ color:'#504840', font:{size:10}, maxRotation:0, autoSkip:true, maxTicksLimit:10 } },
-        y:{ grid:{ color:'rgba(255,255,255,0.04)' }, ticks:{ color:'#504840', font:{size:10}, callback:v=>v+' G' } }
+        x:{ grid:{ color: isLight()?'rgba(0,0,0,0.07)':'rgba(255,255,255,0.04)' }, ticks:{ color: isLight()?'#5a5448':'#504840', font:{size:10}, maxRotation:0, autoSkip:true, maxTicksLimit:10 } },
+        y:{ grid:{ color: isLight()?'rgba(0,0,0,0.07)':'rgba(255,255,255,0.04)' }, ticks:{ color: isLight()?'#5a5448':'#504840', font:{size:10}, callback:v=>v+' G' } }
       }
     }
   });
@@ -657,8 +699,8 @@ function renderCatChart(cats) {
       responsive:true, maintainAspectRatio:false, indexAxis:'y',
       plugins:{ legend:{ display:false } },
       scales:{
-        x:{ grid:{ color:'rgba(255,255,255,0.04)' }, ticks:{ color:'#504840', font:{size:10}, callback:v=>v+'%' } },
-        y:{ grid:{ display:false }, ticks:{ color:'#8a8070', font:{size:10} } }
+        x:{ grid:{ color: isLight()?'rgba(0,0,0,0.07)':'rgba(255,255,255,0.04)' }, ticks:{ color: isLight()?'#5a5448':'#504840', font:{size:10}, callback:v=>v+'%' } },
+        y:{ grid:{ display:false }, ticks:{ color: isLight()?'#5a5448':'#8a8070', font:{size:10} } }
       }
     }
   });
@@ -690,6 +732,40 @@ function redrawPriceChart() {
   state.priceItem = document.getElementById('priceItemSel').value||'all';
   if (window._data) renderPriceChart(window._data, state.priceItem);
 }
+
+function isLight() { return document.documentElement.classList.contains('light'); }
+
+function toggleTheme() {
+  const html = document.documentElement;
+  const btn = document.getElementById('themeBtn');
+  if (html.classList.contains('light')) {
+    html.classList.remove('light');
+    btn.textContent = '☀ LIGHT';
+    localStorage.setItem('tops-theme', 'dark');
+  } else {
+    html.classList.add('light');
+    btn.textContent = '☾ DARK';
+    localStorage.setItem('tops-theme', 'light');
+  }
+  // redraw charts with new colors
+  if (window._data) {
+    renderPriceChart(window._data, state.priceItem);
+    renderCatChart(window._data.categories);
+  }
+}
+
+// Apply saved theme on load
+(function() {
+  const saved = localStorage.getItem('tops-theme');
+  if (saved === 'light') {
+    document.documentElement.classList.add('light');
+    document.addEventListener('DOMContentLoaded', () => {
+      const btn = document.getElementById('themeBtn');
+      if (btn) btn.textContent = '☾ DARK';
+    });
+  }
+})();
+
 function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function setBanner(type, msg) {
   const b = document.getElementById('statusBanner');
