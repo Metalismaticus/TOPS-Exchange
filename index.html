@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TOPS Exchange — Vintage Story Auction Analytics</title>
+<meta name="description" content="Real-time auction price analytics for the TOPS Vintage Story server.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323:wght@400&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:        #0f0f0f;
+  --bg2:       #1a1a1a;
+  --bg3:       #242424;
+  --card:      #141414;
+  --border:    #2e2e2e;
+  --border2:   #3d3d3d;
+  --text:      #e8e0c8;
+  --text2:     #8a8070;
+  --text3:     #504840;
+  --green:     #4caf50;
+  --green2:    #2d6e30;
+  --green-dim: #1a3d1b;
+  --amber:     #d4a017;
+  --amber-dim: #3d2e00;
+  --red:       #c0392b;
+  --red-dim:   #3d0f0a;
+  --purple:    #7c5cbf;
+  --purple-dim:#1e1530;
+  --teal:      #2aa198;
+  --teal-dim:  #0d2e2c;
+  --pixel:     'Press Start 2P', monospace;
+  --mono:      'VT323', monospace;
+}
+
+html { font-size: 16px; }
+body {
+  font-family: var(--mono);
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  line-height: 1.4;
+  image-rendering: pixelated;
+}
+
+/* Pixel border utility — 2px hard shadow */
+.px-box {
+  border: 2px solid var(--border2);
+  box-shadow: 2px 2px 0 #000;
+  background: var(--card);
+}
+.px-box-green { border-color: var(--green2); box-shadow: 2px 2px 0 #000; }
+.px-box-amber { border-color: #5a4200; box-shadow: 2px 2px 0 #000; }
+
+/* ── Layout ── */
+.page { max-width: 1100px; margin: 0 auto; padding: 0 20px 60px; }
+
+/* ── Scanline overlay ── */
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,.08) 2px, rgba(0,0,0,.08) 4px);
+  pointer-events: none; z-index: 9999;
+}
+
+/* ── Header ── */
+.header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 20px 0 18px;
+  border-bottom: 2px solid var(--border2);
+  margin-bottom: 20px; gap: 16px; flex-wrap: wrap;
+}
+.brand { display: flex; align-items: center; gap: 14px; }
+.brand-mark {
+  width: 44px; height: 44px;
+  background: var(--green-dim);
+  border: 2px solid var(--green);
+  box-shadow: 2px 2px 0 #000;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px; flex-shrink: 0; image-rendering: pixelated;
+}
+.brand-name {
+  font-family: var(--pixel);
+  font-size: 13px; line-height: 1.6;
+  color: var(--green);
+  text-shadow: 1px 1px 0 #000, 2px 2px 0 var(--green2);
+  letter-spacing: .02em;
+}
+.brand-sub {
+  font-family: var(--mono);
+  font-size: 16px; color: var(--text2); margin-top: 2px;
+}
+.header-right { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+.pill {
+  font-family: var(--pixel);
+  font-size: 7px; padding: 5px 8px;
+  border: 2px solid var(--border2);
+  box-shadow: 2px 2px 0 #000;
+  background: var(--bg2);
+  color: var(--text2);
+  white-space: nowrap;
+}
+.pill.live {
+  border-color: var(--green);
+  background: var(--green-dim);
+  color: var(--green);
+  animation: blink-border 2s step-end infinite;
+}
+@keyframes blink-border { 50% { border-color: var(--green2); } }
+
+/* ── Status banner ── */
+#statusBanner {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px;
+  border: 2px solid #5a4200;
+  box-shadow: 2px 2px 0 #000;
+  background: var(--amber-dim);
+  color: var(--amber);
+  font-family: var(--mono);
+  font-size: 17px;
+  margin-bottom: 16px;
+}
+#statusBanner.hidden { display: none; }
+#statusBanner.ok { background: var(--green-dim); color: var(--green); border-color: var(--green2); }
+#statusBanner.err { background: var(--red-dim); color: var(--red); border-color: #7a1a13; }
+
+/* ── Filters ── */
+.filters {
+  display: flex; gap: 8px; flex-wrap: wrap;
+  align-items: center; margin-bottom: 18px;
+}
+.filters label {
+  font-family: var(--pixel);
+  font-size: 7px; color: var(--text2);
+}
+.filters select, .filters input[type=date] {
+  font-family: var(--mono);
+  font-size: 16px;
+  height: 32px; padding: 0 8px;
+  border: 2px solid var(--border2);
+  box-shadow: 2px 2px 0 #000;
+  background: var(--bg2);
+  color: var(--text);
+  cursor: pointer;
+  border-radius: 0;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.filters input[type=date] { width: 148px; }
+.filters select:focus, .filters input:focus {
+  outline: none; border-color: var(--green);
+}
+.btn {
+  font-family: var(--pixel);
+  font-size: 7px; height: 32px; padding: 0 14px;
+  border: 2px solid var(--border2);
+  box-shadow: 2px 2px 0 #000;
+  background: var(--bg2); color: var(--text);
+  cursor: pointer; border-radius: 0;
+  transition: transform .1s;
+}
+.btn:hover { background: var(--bg3); }
+.btn:active { transform: translate(2px,2px); box-shadow: none; }
+.btn.primary {
+  background: var(--green-dim);
+  border-color: var(--green);
+  color: var(--green);
+}
+.btn.primary:hover { background: var(--green2); color: #c8ffca; }
+
+/* ── Metrics ── */
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 10px; margin-bottom: 18px;
+}
+.metric {
+  background: var(--bg2);
+  border: 2px solid var(--border2);
+  box-shadow: 2px 2px 0 #000;
+  padding: 14px 16px;
+}
+.metric-label {
+  font-family: var(--pixel);
+  font-size: 7px; color: var(--text2); margin-bottom: 8px;
+  line-height: 1.8;
+}
+.metric-value {
+  font-family: var(--mono);
+  font-size: 36px; line-height: 1; color: var(--green);
+  text-shadow: 1px 1px 0 var(--green2);
+}
+.metric-value small { font-size: 22px; }
+.metric-delta {
+  font-family: var(--pixel);
+  font-size: 6px; margin-top: 6px; line-height: 1.8;
+}
+.up { color: var(--green); } .dn { color: var(--red); }
+
+/* ── Cards ── */
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+@media (max-width: 640px) { .grid { grid-template-columns: 1fr; } }
+.card {
+  background: var(--card);
+  border: 2px solid var(--border2);
+  box-shadow: 2px 2px 0 #000;
+  padding: 14px 16px;
+}
+.card-full { grid-column: 1 / -1; }
+.card-title {
+  font-family: var(--pixel);
+  font-size: 8px; color: var(--text2);
+  margin-bottom: 12px; line-height: 1.8;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 8px;
+}
+
+/* ── Legend ── */
+.legend { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 10px; }
+.legend span {
+  display: flex; align-items: center; gap: 5px;
+  font-family: var(--pixel); font-size: 6px; color: var(--text2);
+}
+.ldot { width: 8px; height: 8px; flex-shrink: 0; }
+
+/* ── Note ── */
+.dedup-note {
+  font-family: var(--mono);
+  font-size: 14px; color: var(--text3);
+  margin-top: 10px; line-height: 1.5;
+  border-left: 2px solid var(--border2);
+  padding-left: 10px;
+}
+
+/* ── Sellers ── */
+.seller-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 0; border-bottom: 1px solid var(--border);
+}
+.seller-row:last-child { border-bottom: none; }
+.rank {
+  font-family: var(--pixel);
+  font-size: 7px; color: var(--text3); width: 14px; text-align: right; flex-shrink: 0;
+}
+.avatar {
+  width: 28px; height: 28px;
+  border: 2px solid var(--border2);
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--pixel); font-size: 6px; flex-shrink: 0;
+}
+.seller-name { flex: 1; font-family: var(--mono); font-size: 20px; }
+.seller-lots { font-family: var(--mono); font-size: 15px; color: var(--text2); }
+.seller-vol { font-family: var(--mono); font-size: 18px; min-width: 72px; text-align: right; color: var(--amber); }
+
+/* ── Items ── */
+.item-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px 0; border-bottom: 1px solid var(--border);
+}
+.item-row:last-child { border-bottom: none; }
+.item-icon {
+  width: 28px; height: 28px;
+  border: 2px solid var(--border2);
+  background: var(--bg2);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; overflow: hidden; image-rendering: pixelated;
+}
+.item-icon img { width: 22px; height: 22px; image-rendering: pixelated; }
+.item-name { flex: 1; font-family: var(--mono); font-size: 19px; }
+.item-cat { font-family: var(--pixel); font-size: 6px; color: var(--text3); margin-right: 6px; }
+.badge {
+  font-family: var(--pixel);
+  font-size: 7px; padding: 4px 7px;
+  border: 2px solid; white-space: nowrap;
+}
+.badge.ok { border-color: var(--green2); color: var(--green); background: var(--green-dim); }
+.badge.up { border-color: #7a1a13; color: var(--red); background: var(--red-dim); }
+
+/* ── Chart select ── */
+.chart-sel {
+  font-family: var(--mono); font-size: 15px;
+  height: 26px; padding: 0 8px;
+  border: 2px solid var(--border2);
+  background: var(--bg2); color: var(--text);
+  border-radius: 0; -webkit-appearance: none; cursor: pointer;
+}
+
+/* ── Footer ── */
+.footer {
+  display: flex; justify-content: space-between; align-items: center;
+  flex-wrap: wrap; gap: 8px;
+  margin-top: 20px; padding-top: 14px;
+  border-top: 2px solid var(--border2);
+  font-family: var(--pixel); font-size: 6px; color: var(--text3);
+}
+.footer a { color: var(--text2); text-decoration: none; }
+.footer a:hover { color: var(--green); }
+
+/* ── Chart wrap ── */
+.chart-wrap { position: relative; width: 100%; }
+
+/* ── Pixel cursor blink ── */
+.cursor::after { content: '█'; animation: cur .8s step-end infinite; }
+@keyframes cur { 50% { opacity: 0; } }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header class="header">
+    <div class="brand">
+      <div class="brand-mark">⇄</div>
+      <div>
+        <div class="brand-name">TOPS EXCHANGE</div>
+        <div class="brand-sub">Vintage Story · Auction Analytics</div>
+      </div>
+    </div>
+    <div class="header-right">
+      <span class="pill">TOPS SERVER</span>
+      <span class="pill live">● LIVE</span>
+      <span class="pill" id="lastUpdated">...</span>
+    </div>
+  </header>
+
+  <div id="statusBanner">
+    ▶ MOCK DATA — connect Supabase to see real auction data
+  </div>
+
+  <div class="filters" role="search" aria-label="Filter auction data">
+    <label for="dateFrom">FROM</label>
+    <input type="date" id="dateFrom">
+    <label for="dateTo">TO</label>
+    <input type="date" id="dateTo">
+    <select id="catFilter" aria-label="Category">
+      <option value="all">ALL CATEGORIES</option>
+      <option value="Tools">TOOLS</option>
+      <option value="Items">ITEMS</option>
+      <option value="Construction">CONSTRUCTION</option>
+      <option value="Decorative">DECORATIVE</option>
+      <option value="Food">FOOD &amp; FARMING</option>
+      <option value="General">GENERAL</option>
+      <option value="Survival">SURVIVAL</option>
+    </select>
+    <select id="itemFilter" aria-label="Item filter">
+      <option value="all">ALL ITEMS</option>
+    </select>
+    <button class="btn primary" onclick="applyFilters()">▶ APPLY</button>
+    <button class="btn" onclick="resetFilters()">↺ RESET</button>
+  </div>
+
+  <div class="metrics" role="region" aria-label="Summary statistics">
+    <div class="metric">
+      <div class="metric-label">AVG LISTINGS<br>PER DAY</div>
+      <div class="metric-value" id="mAvg">—</div>
+      <div class="metric-delta" id="mAvgDelta"></div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">MEDIAN<br>PRICE</div>
+      <div class="metric-value" id="mMed">— <small>⚙</small></div>
+      <div class="metric-delta" id="mMedDelta"></div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">ACTIVE<br>SELLERS</div>
+      <div class="metric-value" id="mSellers">—</div>
+      <div class="metric-delta" id="mSellersDelta"></div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">UNIQUE<br>ITEMS SEEN</div>
+      <div class="metric-value" id="mItems">—</div>
+      <div class="metric-delta" id="mItemsDelta"></div>
+    </div>
+  </div>
+
+  <div class="card card-full" style="margin-bottom:12px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+      <div class="card-title" style="margin-bottom:0;border-bottom:none;padding-bottom:0;">PRICE HISTORY — MEDIAN PER DAY</div>
+      <select class="chart-sel" id="priceItemSel" onchange="redrawPriceChart()" aria-label="Select item">
+        <option value="all">ALL ITEMS (AGGREGATED)</option>
+      </select>
+    </div>
+    <div style="border-bottom:1px solid var(--border);margin-bottom:10px;"></div>
+    <div class="legend">
+      <span><span class="ldot" style="background:#4caf50;"></span>MEDIAN PRICE (⚙)</span>
+      <span><span class="ldot" style="background:#7c5cbf;opacity:.6;"></span>MIN / MAX RANGE</span>
+    </div>
+    <div class="chart-wrap" style="height:220px;">
+      <canvas id="priceChart" role="img" aria-label="Median auction price per day">Price history data.</canvas>
+    </div>
+    <p class="dedup-note" style="margin-top:10px;">
+      ℹ SNAPSHOT-BASED: mod captures listings when player opens Auction House.
+      Same lot seen multiple times = deduplicated. Price = listed, not confirmed sale.
+    </p>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <div class="card-title">▲ TOP SELLERS</div>
+      <div id="sellersList"><div style="color:var(--text3);font-size:18px;">LOADING...</div></div>
+    </div>
+    <div class="card">
+      <div class="card-title">★ TRENDING ITEMS</div>
+      <div id="itemsList"><div style="color:var(--text3);font-size:18px;">LOADING...</div></div>
+    </div>
+    <div class="card card-full">
+      <div class="card-title">▦ LISTINGS BY CATEGORY — AVG PER DAY</div>
+      <div class="legend" id="catLegend"></div>
+      <div class="chart-wrap" style="height:220px;">
+        <canvas id="catChart" role="img" aria-label="Listings by category">Category breakdown.</canvas>
+      </div>
+    </div>
+  </div>
+
+  <footer class="footer">
+    <span id="footerUpdated">—</span>
+    <span>
+      POWERED BY <a href="https://mods.vintagestory.at/auction" target="_blank" rel="noopener">AUCTIONFILTER MOD</a>
+      · <a href="https://github.com/Metalismaticus/TOPS-Exchange" target="_blank" rel="noopener">GITHUB</a>
+    </span>
+  </footer>
+</div>
+
+<script>
+const CONFIG = {
+  useMockData: true,
+  supabaseUrl: '',
+  supabaseAnonKey: '',
+  tableName: 'auction_listings',
+};
+
+const MOCK = {
+  days: ['Apr 1','Apr 3','Apr 5','Apr 7','Apr 9','Apr 11','Apr 13','Apr 15','Apr 17','Apr 19','Apr 21','Apr 23','Apr 25','Apr 27','Apr 29'],
+  priceAll: {
+    med: [18,21,19,25,22,28,24,30,26,29,32,27,24,28,31],
+    min: [10,12,11,16,14,18,15,20,17,19,22,17,15,18,21],
+    max: [28,32,29,36,33,40,35,43,38,41,45,39,35,40,43],
+  },
+  priceByItem: {
+    'knife-flint':  { med:[10,11,12,11,13,12,14,12,13,11,12,13,12,14,13], min:[8,9,10,9,11,10,12,10,11,9,10,11,10,12,11], max:[13,14,15,14,16,15,17,15,16,14,15,16,15,17,16] },
+    'ingot-copper': { med:[30,32,35,34,38,36,40,38,42,39,41,38,37,40,43], min:[26,28,31,30,34,32,36,34,38,35,37,34,33,36,39], max:[35,37,40,39,43,41,45,43,47,44,46,43,42,45,48] },
+    'cloth-linen':  { med:[6,7,6,8,7,7,8,7,9,8,8,7,8,9,8],   min:[5,6,5,7,6,6,7,6,8,7,7,6,7,8,7],   max:[8,9,8,10,9,9,10,9,11,10,10,9,10,11,10] },
+    'charcoal':     { med:[3,3,4,3,4,4,3,4,3,4,4,3,4,3,4],   min:[2,2,3,2,3,3,2,3,2,3,3,2,3,2,3],   max:[4,4,5,4,5,5,4,5,4,5,5,4,5,4,5] },
+    'axe-copper':   { med:[40,42,45,43,47,46,50,48,52,49,51,47,46,49,52], min:[36,38,41,39,43,42,46,44,48,45,47,43,42,45,48], max:[45,47,50,48,52,51,55,53,57,54,56,52,51,54,57] },
+  },
+  metrics: { avgPerDay:61, avgPerDayDelta:+9, medianPrice:24, medianDelta:-3, sellers:67, sellersDelta:+8, uniqueItems:213, uniqueItemsDelta:+19 },
+  sellers: [
+    { name:'KovalMaster', lots:142, volume:3410, initials:'KV', color:'#1a3d1b', colorTx:'#4caf50' },
+    { name:'TradersEnd',  lots:97,  volume:2890, initials:'TR', color:'#1e1530', colorTx:'#9b7fe8' },
+    { name:'WildDig',     lots:88,  volume:1740, initials:'WD', color:'#3d2e00', colorTx:'#d4a017' },
+    { name:'RusticMerch', lots:71,  volume:1230, initials:'RM', color:'#3d0f0a', colorTx:'#e05a4e' },
+    { name:'PeatPeddler', lots:63,  volume:990,  initials:'PP', color:'#0d2e2c', colorTx:'#2aa198' },
+  ],
+  items: [
+    { code:'knife-flint',  name:'Flint knife',  cat:'Tools',    price:12, trend:'ok' },
+    { code:'ingot-copper', name:'Copper ingot', cat:'Items',    price:38, trend:'up' },
+    { code:'cloth-linen',  name:'Linen cloth',  cat:'Items',    price:7,  trend:'ok' },
+    { code:'charcoal',     name:'Charcoal',     cat:'Survival', price:3,  trend:'ok' },
+    { code:'axe-copper',   name:'Copper axe',   cat:'Tools',    price:45, trend:'up' },
+  ],
+  categories: {
+    labels: ['Tools','Items','Construction','Decorative','Food & Farming','General / Other'],
+    data:   [31,26,17,11,9,6],
+    colors: ['#4caf50','#7c5cbf','#d4a017','#c0392b','#2aa198','#555555'],
+  },
+};
+
+let priceChart = null, catChart = null;
+let state = { priceItem: 'all' };
+
+document.addEventListener('DOMContentLoaded', () => {
+  setDefaultDates();
+  populateItemSelectMock();
+  CONFIG.useMockData ? loadMock() : loadFromSupabase();
+});
+
+function setDefaultDates() {
+  const now = new Date(), from = new Date(now);
+  from.setDate(now.getDate() - 30);
+  document.getElementById('dateFrom').value = from.toISOString().slice(0,10);
+  document.getElementById('dateTo').value   = now.toISOString().slice(0,10);
+}
+
+function populateItemSelectMock() {
+  const items = MOCK.items.map(i => ({ code: i.code, name: i.name }));
+  ['itemFilter','priceItemSel'].forEach(id => {
+    const sel = document.getElementById(id);
+    while (sel.options.length > 1) sel.remove(1);
+    items.forEach(it => sel.add(new Option(it.name.toUpperCase(), it.code)));
+  });
+}
+
+function loadMock() {
+  setBanner('mock', '▶ MOCK DATA — connect Supabase to see real auction data');
+  renderAll(MOCK);
+}
+
+async function loadFromSupabase() {
+  setBanner('loading', '⏳ CONNECTING TO DATABASE...');
+  try {
+    const from = document.getElementById('dateFrom').value;
+    const to   = document.getElementById('dateTo').value;
+    const cat  = document.getElementById('catFilter').value;
+    let url = `${CONFIG.supabaseUrl}/rest/v1/${CONFIG.tableName}?select=*&order=collected_at.asc`;
+    if (from) url += `&collected_at=gte.${from}T00:00:00`;
+    if (to)   url += `&collected_at=lte.${to}T23:59:59`;
+    if (cat !== 'all') url += `&category=eq.${encodeURIComponent(cat)}`;
+    const res = await fetch(url, { headers: { 'apikey': CONFIG.supabaseAnonKey, 'Authorization': `Bearer ${CONFIG.supabaseAnonKey}` } });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const rows = await res.json();
+    const data = aggregateRows(rows);
+    renderAll(data);
+    setBanner('ok', `✓ LIVE — ${rows.length} SNAPSHOTS LOADED`);
+    document.getElementById('lastUpdated').textContent = new Date().toLocaleTimeString();
+  } catch(e) {
+    setBanner('err', '✗ ERROR: ' + e.message);
+  }
+}
+
+function aggregateRows(rows) {
+  const seen = new Set();
+  const deduped = rows.filter(r => {
+    const bucket = Math.floor(new Date(r.collected_at).getTime() / (4*3600*1000));
+    const key = `${r.item_code}|${r.price}|${r.seller}|${r.expire_date}|${bucket}`;
+    if (seen.has(key)) return false;
+    seen.add(key); return true;
+  });
+  const byDay = {};
+  deduped.forEach(r => { const d = r.collected_at.slice(0,10); if (!byDay[d]) byDay[d]=[]; byDay[d].push(r); });
+  const days = Object.keys(byDay).sort();
+  const priceAll = { med:[], min:[], max:[] };
+  days.forEach(d => {
+    const prices = byDay[d].map(r=>r.price).sort((a,b)=>a-b);
+    priceAll.med.push(median(prices));
+    priceAll.min.push(prices[0]);
+    priceAll.max.push(prices[prices.length-1]);
+  });
+  const sellerMap = {};
+  deduped.forEach(r => { if (!sellerMap[r.seller]) sellerMap[r.seller]={lots:0,volume:0}; sellerMap[r.seller].lots++; sellerMap[r.seller].volume+=r.price*(r.quantity||1); });
+  const AVCOLS = [['#1a3d1b','#4caf50'],['#1e1530','#9b7fe8'],['#3d2e00','#d4a017'],['#3d0f0a','#e05a4e'],['#0d2e2c','#2aa198']];
+  const sellers = Object.entries(sellerMap).sort((a,b)=>b[1].volume-a[1].volume).slice(0,5).map(([name,s],i)=>({ name, lots:s.lots, volume:s.volume, initials:name.slice(0,2).toUpperCase(), color:AVCOLS[i%5][0], colorTx:AVCOLS[i%5][1] }));
+  const itemMap = {};
+  deduped.forEach(r => { if (!itemMap[r.item_code]) itemMap[r.item_code]={name:r.item_name,cat:r.category,prices:[],count:0}; itemMap[r.item_code].prices.push(r.price); itemMap[r.item_code].count++; });
+  const items = Object.entries(itemMap).sort((a,b)=>b[1].count-a[1].count).slice(0,7).map(([code,d]) => { const s=[...d.prices].sort((a,b)=>a-b); return { code, name:d.name||code, cat:d.cat||'General', price:median(s), trend:'ok' }; });
+  const catMap = {};
+  deduped.forEach(r => { catMap[r.category]=(catMap[r.category]||0)+1; });
+  const catEntries = Object.entries(catMap).sort((a,b)=>b[1]-a[1]);
+  const total = catEntries.reduce((s,[,v])=>s+v,0);
+  const CMAP = { Tools:'#4caf50', Items:'#7c5cbf', Construction:'#d4a017', Decorative:'#c0392b', Food:'#2aa198' };
+  const allPrices = deduped.map(r=>r.price).sort((a,b)=>a-b);
+  populateItemSelect(Object.entries(itemMap).map(([code,d])=>({code,name:d.name||code})));
+  return {
+    days: days.map(d => { const dt=new Date(d); return dt.toLocaleDateString('en',{month:'short',day:'numeric'}); }),
+    priceAll, priceByItem: {},
+    metrics: { avgPerDay: days.length?Math.round(deduped.length/days.length):0, avgPerDayDelta:null, medianPrice:median(allPrices), medianDelta:null, sellers:new Set(deduped.map(r=>r.seller)).size, sellersDelta:null, uniqueItems:new Set(deduped.map(r=>r.item_code)).size, uniqueItemsDelta:null },
+    sellers, items,
+    categories: { labels:catEntries.map(([k])=>k), data:catEntries.map(([,v])=>Math.round(v/total*100)), colors:catEntries.map(([k],i)=>CMAP[k]||['#555','#7c5cbf','#c0392b'][i%3]) },
+  };
+}
+
+function median(s) { if (!s.length) return 0; const m=Math.floor(s.length/2); return s.length%2?s[m]:Math.round((s[m-1]+s[m])/2); }
+
+function renderAll(data) {
+  renderMetrics(data.metrics);
+  renderPriceChart(data, state.priceItem);
+  renderSellers(data.sellers);
+  renderItems(data.items);
+  renderCatChart(data.categories);
+  if (CONFIG.useMockData) {
+    document.getElementById('lastUpdated').textContent = 'MOCK';
+    document.getElementById('footerUpdated').textContent = 'MOCK DATA · CONNECT SUPABASE FOR LIVE ANALYTICS';
+  }
+  window._data = data;
+}
+
+function renderMetrics(m) {
+  document.getElementById('mAvg').textContent = m.avgPerDay;
+  document.getElementById('mMed').innerHTML = m.medianPrice + ' <small>⚙</small>';
+  document.getElementById('mSellers').textContent = m.sellers;
+  document.getElementById('mItems').textContent = m.uniqueItems;
+  function setDelta(id, val, unit='') {
+    const el = document.getElementById(id);
+    if (val===null) { el.textContent=''; return; }
+    el.className = 'metric-delta ' + (val>=0?'up':'dn');
+    el.textContent = (val>=0?'▲ +':'▼ ') + val + unit + ' VS PREV';
+  }
+  setDelta('mAvgDelta', m.avgPerDayDelta);
+  setDelta('mMedDelta', m.medianDelta, '%');
+  setDelta('mSellersDelta', m.sellersDelta);
+  setDelta('mItemsDelta', m.uniqueItemsDelta);
+}
+
+function renderPriceChart(data, itemKey) {
+  const d = (itemKey!=='all' && data.priceByItem[itemKey]) ? data.priceByItem[itemKey] : data.priceAll;
+  const ctx = document.getElementById('priceChart');
+  if (priceChart) priceChart.destroy();
+  priceChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: data.days,
+      datasets: [
+        { label:'Min', data:d.min, borderColor:'transparent', backgroundColor:'transparent', pointRadius:0, fill:false },
+        { label:'Range', data:d.max, fill:'-1', backgroundColor:'rgba(124,92,191,0.15)', borderColor:'transparent', pointRadius:0, tension:0.3 },
+        { label:'Median', data:d.med, borderColor:'#4caf50', backgroundColor:'transparent', tension:0.3, fill:false, pointRadius:4, pointBackgroundColor:'#4caf50', pointStyle:'rect', borderWidth:2 },
+      ]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ display:false } },
+      scales:{
+        x:{ grid:{ color:'rgba(255,255,255,0.04)' }, ticks:{ color:'#504840', font:{size:10}, maxRotation:0, autoSkip:true, maxTicksLimit:10 } },
+        y:{ grid:{ color:'rgba(255,255,255,0.04)' }, ticks:{ color:'#504840', font:{size:10}, callback:v=>v+' ⚙' } }
+      }
+    }
+  });
+}
+
+function renderSellers(sellers) {
+  const el = document.getElementById('sellersList');
+  if (!sellers.length) { el.innerHTML='<div style="color:var(--text3);font-size:18px;">NO DATA YET</div>'; return; }
+  el.innerHTML = sellers.map((s,i)=>`
+    <div class="seller-row">
+      <span class="rank">${i+1}</span>
+      <div class="avatar" style="background:${s.color};border-color:${s.colorTx};color:${s.colorTx};">${s.initials}</div>
+      <span class="seller-name">${esc(s.name)}</span>
+      <span class="seller-lots">${s.lots} lots</span>
+      <span class="seller-vol">${s.volume.toLocaleString()} ⚙</span>
+    </div>`).join('');
+}
+
+function renderItems(items) {
+  const el = document.getElementById('itemsList');
+  if (!items.length) { el.innerHTML='<div style="color:var(--text3);font-size:18px;">NO DATA YET</div>'; return; }
+  el.innerHTML = items.map(it=>`
+    <div class="item-row">
+      <div class="item-icon">
+        <img src="icons/${esc(it.code)}.png" alt="" onerror="this.style.display='none';this.parentNode.textContent='?';">
+      </div>
+      <span class="item-name">${esc(it.name)}</span>
+      <span class="item-cat">${esc(it.cat)}</span>
+      <span class="badge ${it.trend}">${Math.round(it.price)} ⚙${it.trend==='up'?' ↑':''}</span>
+    </div>`).join('');
+}
+
+function renderCatChart(cats) {
+  document.getElementById('catLegend').innerHTML = cats.labels.map((l,i)=>
+    `<span><span class="ldot" style="background:${cats.colors[i]};"></span>${l.toUpperCase()}</span>`).join('');
+  const ctx = document.getElementById('catChart');
+  if (catChart) catChart.destroy();
+  catChart = new Chart(ctx, {
+    type:'bar',
+    data:{ labels:cats.labels.map(l=>l.toUpperCase()), datasets:[{ data:cats.data, backgroundColor:cats.colors, borderRadius:0, borderSkipped:false }] },
+    options:{
+      responsive:true, maintainAspectRatio:false, indexAxis:'y',
+      plugins:{ legend:{ display:false } },
+      scales:{
+        x:{ grid:{ color:'rgba(255,255,255,0.04)' }, ticks:{ color:'#504840', font:{size:10}, callback:v=>v+'%' } },
+        y:{ grid:{ display:false }, ticks:{ color:'#8a8070', font:{size:10} } }
+      }
+    }
+  });
+}
+
+function populateItemSelect(items) {
+  ['itemFilter','priceItemSel'].forEach(id => {
+    const sel = document.getElementById(id), cur = sel.value;
+    while (sel.options.length>1) sel.remove(1);
+    items.forEach(it => sel.add(new Option((it.name||it.code).toUpperCase(), it.code)));
+    sel.value = cur||'all';
+  });
+}
+
+function applyFilters() {
+  if (CONFIG.useMockData) {
+    state.priceItem = document.getElementById('priceItemSel').value||'all';
+    renderPriceChart(MOCK, state.priceItem);
+  } else { loadFromSupabase(); }
+}
+function resetFilters() {
+  setDefaultDates();
+  document.getElementById('catFilter').value='all';
+  document.getElementById('itemFilter').value='all';
+  document.getElementById('priceItemSel').value='all';
+  applyFilters();
+}
+function redrawPriceChart() {
+  state.priceItem = document.getElementById('priceItemSel').value||'all';
+  if (window._data) renderPriceChart(window._data, state.priceItem);
+}
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function setBanner(type, msg) {
+  const b = document.getElementById('statusBanner');
+  b.textContent = msg;
+  b.className = type==='ok'?'ok':type==='err'?'err':'';
+  if (type==='ok') setTimeout(()=>b.classList.add('hidden'),5000);
+}
+</script>
+</body>
+</html>
