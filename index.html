@@ -139,6 +139,28 @@ body::before {
 @keyframes blink-border { 50% { border-color: var(--green2); } }
 
 
+
+/* ── Autocomplete dropdown ── */
+.ac-item {
+  font-family: var(--mono);
+  font-size: 16px;
+  padding: 5px 10px;
+  cursor: pointer;
+  color: var(--text);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 8px;
+}
+.ac-item:last-child { border-bottom: none; }
+.ac-item:hover { background: var(--bg3); color: var(--green); }
+.ac-item img { width: 20px; height: 20px; image-rendering: pixelated; flex-shrink: 0; }
+.ac-clear {
+  font-family: var(--pixel);
+  font-size: 6px; padding: 4px 8px;
+  color: var(--text3); cursor: pointer;
+  border-top: 1px solid var(--border);
+  text-align: center;
+}
+.ac-clear:hover { color: var(--red); }
 /* ── Theme toggle ── */
 .theme-toggle {
   font-family: var(--pixel);
@@ -387,9 +409,16 @@ body::before {
       <option value="General">GENERAL</option>
       <option value="Survival">SURVIVAL</option>
     </select>
-    <select id="itemFilter" aria-label="Item filter">
-      <option value="all">ALL ITEMS</option>
-    </select>
+    <div style="position:relative;flex:1;min-width:160px;max-width:280px;">
+      <input type="text" id="itemSearch" placeholder="SEARCH ITEM..." autocomplete="off"
+        oninput="onItemSearch(this.value)"
+        style="font-family:var(--mono);font-size:16px;height:32px;padding:0 8px;width:100%;
+               border:2px solid var(--border2);box-shadow:2px 2px 0 #000;
+               background:var(--bg2);color:var(--text);border-radius:0;">
+      <div id="itemDropdown" style="display:none;position:absolute;top:34px;left:0;right:0;
+           background:var(--bg2);border:2px solid var(--border2);box-shadow:2px 2px 0 #000;
+           z-index:100;max-height:200px;overflow-y:auto;"></div>
+    </div>
     <button class="btn primary" onclick="applyFilters()">▶ APPLY</button>
     <button class="btn" onclick="resetFilters()">↺ RESET</button>
   </div>
@@ -420,9 +449,15 @@ body::before {
   <div class="card card-full" style="margin-bottom:12px;">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
       <div class="card-title" style="margin-bottom:0;border-bottom:none;padding-bottom:0;">PRICE HISTORY — MEDIAN PER DAY</div>
-      <select class="chart-sel" id="priceItemSel" onchange="redrawPriceChart()" aria-label="Select item">
-        <option value="all">ALL ITEMS (AGGREGATED)</option>
-      </select>
+      <div style="position:relative;">
+        <input type="text" id="priceItemSearch" placeholder="ALL ITEMS..." autocomplete="off"
+          oninput="onPriceItemSearch(this.value)"
+          style="font-family:var(--mono);font-size:15px;height:28px;padding:0 8px;width:200px;
+                 border:2px solid var(--border2);background:var(--bg2);color:var(--text);border-radius:0;">
+        <div id="priceItemDropdown" style="display:none;position:absolute;top:30px;right:0;width:220px;
+             background:var(--bg2);border:2px solid var(--border2);box-shadow:2px 2px 0 #000;
+             z-index:100;max-height:180px;overflow-y:auto;"></div>
+      </div>
     </div>
     <div style="border-bottom:1px solid var(--border);margin-bottom:10px;"></div>
     <div class="legend">
@@ -510,7 +545,7 @@ const MOCK = {
 };
 
 let priceChart = null, catChart = null;
-let state = { priceItem: 'all' };
+let state = { priceItem: 'all', itemFilter: 'all' };
 
 document.addEventListener('DOMContentLoaded', () => {
   setDefaultDates();
@@ -526,12 +561,7 @@ function setDefaultDates() {
 }
 
 function populateItemSelectMock() {
-  const items = MOCK.items.map(i => ({ code: i.code, name: i.name }));
-  ['itemFilter','priceItemSel'].forEach(id => {
-    const sel = document.getElementById(id);
-    while (sel.options.length > 1) sel.remove(1);
-    items.forEach(it => sel.add(new Option(it.name.toUpperCase(), it.code)));
-  });
+  ALL_ITEMS = MOCK.items.map(i => ({ code: i.code, name: i.name }));
 }
 
 function loadMock() {
@@ -706,32 +736,103 @@ function renderCatChart(cats) {
   });
 }
 
+let ALL_ITEMS = [];
+
 function populateItemSelect(items) {
-  ['itemFilter','priceItemSel'].forEach(id => {
-    const sel = document.getElementById(id), cur = sel.value;
-    while (sel.options.length>1) sel.remove(1);
-    items.forEach(it => sel.add(new Option((it.name||it.code).toUpperCase(), it.code)));
-    sel.value = cur||'all';
-  });
+  ALL_ITEMS = items;
 }
+
+function onItemSearch(val) {
+  const dd = document.getElementById('itemDropdown');
+  if (!val.trim()) { dd.style.display='none'; state.itemFilter='all'; return; }
+  const q = val.toLowerCase();
+  const matches = ALL_ITEMS.filter(it => (it.name||it.code).toLowerCase().includes(q)).slice(0,12);
+  if (!matches.length) { dd.style.display='none'; return; }
+  dd.innerHTML = matches.map(it => `
+    <div class="ac-item" onclick="selectItem('${escAttr(it.code)}','${escAttr(it.name||it.code)}')">
+      <img src="icons/item/${escAttr(it.code)}.png" onerror="this.src='icons/block/${escAttr(it.code)}.png';this.onerror=function(){this.style.display='none'};">
+      ${esc(it.name||it.code)}
+    </div>`).join('') +
+    '<div class="ac-clear" onclick="clearItemFilter()">✕ CLEAR FILTER</div>';
+  dd.style.display='block';
+}
+
+function selectItem(code, name) {
+  state.itemFilter = code;
+  document.getElementById('itemSearch').value = name.toUpperCase();
+  document.getElementById('itemDropdown').style.display='none';
+  applyFilters();
+}
+
+function clearItemFilter() {
+  state.itemFilter = 'all';
+  document.getElementById('itemSearch').value = '';
+  document.getElementById('itemDropdown').style.display='none';
+  applyFilters();
+}
+
+function onPriceItemSearch(val) {
+  const dd = document.getElementById('priceItemDropdown');
+  if (!val.trim()) {
+    dd.style.display='none';
+    state.priceItem='all';
+    if (window._data) renderPriceChart(window._data, 'all');
+    return;
+  }
+  const q = val.toLowerCase();
+  const matches = ALL_ITEMS.filter(it => (it.name||it.code).toLowerCase().includes(q)).slice(0,10);
+  if (!matches.length) { dd.style.display='none'; return; }
+  dd.innerHTML = matches.map(it => `
+    <div class="ac-item" onclick="selectPriceItem('${escAttr(it.code)}','${escAttr(it.name||it.code)}')">
+      <img src="icons/item/${escAttr(it.code)}.png" onerror="this.src='icons/block/${escAttr(it.code)}.png';this.onerror=function(){this.style.display='none'};">
+      ${esc(it.name||it.code)}
+    </div>`).join('') +
+    '<div class="ac-clear" onclick="clearPriceItem()">✕ ALL ITEMS</div>';
+  dd.style.display='block';
+}
+
+function selectPriceItem(code, name) {
+  state.priceItem = code;
+  document.getElementById('priceItemSearch').value = name.toUpperCase();
+  document.getElementById('priceItemDropdown').style.display='none';
+  if (window._data) renderPriceChart(window._data, code);
+}
+
+function clearPriceItem() {
+  state.priceItem = 'all';
+  document.getElementById('priceItemSearch').value = '';
+  document.getElementById('priceItemDropdown').style.display='none';
+  if (window._data) renderPriceChart(window._data, 'all');
+}
+
+function escAttr(s) { return String(s).replace(/'/g,"\'").replace(/"/g,'&quot;'); }
+
 
 function applyFilters() {
   if (CONFIG.useMockData) {
-    state.priceItem = document.getElementById('priceItemSel').value||'all';
     renderPriceChart(MOCK, state.priceItem);
   } else { loadFromSupabase(); }
 }
 function resetFilters() {
   setDefaultDates();
   document.getElementById('catFilter').value='all';
-  document.getElementById('itemFilter').value='all';
-  document.getElementById('priceItemSel').value='all';
+  document.getElementById('itemSearch').value='';
+  document.getElementById('itemDropdown').style.display='none';
+  document.getElementById('priceItemSearch').value='';
+  document.getElementById('priceItemDropdown').style.display='none';
+  state.itemFilter='all';
+  state.priceItem='all';
   applyFilters();
 }
-function redrawPriceChart() {
-  state.priceItem = document.getElementById('priceItemSel').value||'all';
-  if (window._data) renderPriceChart(window._data, state.priceItem);
-}
+
+
+
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('#itemSearch') && !e.target.closest('#itemDropdown'))
+    document.getElementById('itemDropdown').style.display='none';
+  if (!e.target.closest('#priceItemSearch') && !e.target.closest('#priceItemDropdown'))
+    document.getElementById('priceItemDropdown').style.display='none';
+});
 
 function isLight() { return document.documentElement.classList.contains('light'); }
 
